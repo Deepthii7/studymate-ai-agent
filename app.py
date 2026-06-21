@@ -1,4 +1,11 @@
 import streamlit as st
+import google.generativeai as genai
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -327,11 +334,12 @@ with input_col2:
     generate_clicked = st.button("Generate Learning Package")
 
     # Simple placeholder feedback when the button is clicked
-    if generate_clicked:
-        if topic.strip() == "":
-            st.warning("Please enter a topic before generating your learning package.")
-        else:
-            st.success(f"Your AI agents are preparing a learning package for: **{topic}**")
+if generate_clicked:
+    if topic.strip() == "":
+        st.warning("Please enter a topic before generating your learning package.")
+    else:
+        response = model.generate_content(topic)
+        st.write(response.text)
 
 # ============================================================
 # "MEET YOUR AI AGENTS" SECTION
