@@ -39,6 +39,22 @@ def quiz_agent(topic, explanation):
     - 1 Scenario-based question
     - Include answers
     - Keep explanations short
+
+    Formatting rules (follow exactly):
+    - For the Multiple Choice question, write each option on its own separate line,
+      formatted exactly like:
+
+      a) First option
+
+      b) Second option
+
+      c) Third option
+
+      d) Fourth option
+
+    - Do not place multiple options on the same line.
+    - Never write "Answer:" on the same line as the question.
+    - Leave one blank line before every "Answer:".
     """
 
     response = model.generate_content(prompt)
@@ -137,6 +153,83 @@ def generate_learning_package(topic):
     text = text.replace(" d)", "\nd)")
     print(text)
     return text
+
+
+# ============================================================
+# COORDINATOR AGENT
+# ------------------------------------------------------------
+# Orchestrates the existing Explainer, Quiz Generator, and
+# Study Planner agents instead of relying on one giant prompt.
+#
+# Flow:
+#   1. explainer_agent(topic)              -> explanation
+#   2. quiz_agent(topic, explanation)      -> quiz (uses explanation as context)
+#   3. planner_agent(topic, explanation)   -> study plan (uses explanation as context)
+#
+# This keeps the total Gemini API calls at exactly 3 per
+# "Generate Learning Package" click, while still being a real
+# multi-agent pipeline (each agent has its own prompt/responsibility,
+# and the Coordinator passes shared context between them).
+#
+# The final assembled string matches the exact section structure
+# (## EXPLANATION / ### QUIZ / ## STUDY PLAN) that the UI already
+# expects, so the on-screen output format does not change.
+# ============================================================
+def _strip_leading_indent(text):
+    """
+    Removes leading whitespace from every line in the given text.
+
+    Why this is needed: Markdown (and therefore Streamlit's st.markdown)
+    treats any line starting with 4+ spaces (or a tab) as an indented
+    code block. Gemini sometimes echoes the indentation level used in
+    the prompt's own example formatting (e.g. "    a) First option"),
+    which would otherwise get rendered as a dark code block instead of
+    plain text. This strips that leading whitespace without altering
+    the actual content of each line.
+    """
+    return "\n".join(line.lstrip() for line in text.split("\n"))
+
+
+def coordinator_agent(topic):
+    # Step 1: Explainer Agent
+    explanation = explainer_agent(topic)
+
+    # Step 2: Quiz Generator Agent (grounded in the explanation)
+    quiz = quiz_agent(topic, explanation)
+    idx = quiz.find("a)")
+    print("QUIZ SLICE:", repr(quiz[max(0, idx-60):idx+40]))
+
+    # Step 3: Study Planner Agent (grounded in the explanation)
+    study_plan = planner_agent(topic, explanation)
+
+    # Strip any leading indentation Gemini may have echoed back, so
+    # Streamlit never mistakes a line (e.g. "Answer:" or a code example)
+    # for an indented Markdown code block.
+    explanation = _strip_leading_indent(explanation)
+    quiz = _strip_leading_indent(quiz)
+    study_plan = _strip_leading_indent(study_plan)
+
+    # Apply the same a)/b)/c)/d) line-break normalization used by
+    # generate_learning_package(), since quiz_agent's output may not
+    # always insert real newlines before each option.
+    quiz = quiz.replace(" a)", "\na)")
+    quiz = quiz.replace(" b)", "\nb)")
+    quiz = quiz.replace(" c)", "\nc)")
+    quiz = quiz.replace(" d)", "\nd)")
+
+    # Assemble into the same overall format the app already renders.
+    learning_package = f"""## EXPLANATION
+{explanation}
+
+### QUIZ
+{quiz}
+
+## STUDY PLAN
+{study_plan}
+"""
+
+    print(learning_package)
+    return learning_package
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -409,6 +502,27 @@ p, div, span {
 </style>
 """, unsafe_allow_html=True)
 
+# ------------------------------------------------------------
+# SCOPED FIX: restore Streamlit's default text color inside
+# code blocks only. The global "p, div, span { color: black }"
+# rule above (kept as-is) was also overriding the text color
+# INSIDE Streamlit's dark-background code blocks, making text
+# like "Answer:" nearly invisible (black text on a dark box).
+#
+# This rule is scoped to div[data-testid="stCodeBlock"] only,
+# so it does not affect any other div/span/p elsewhere on the
+# page (hero section, agent cards, feature cards, etc.).
+# ------------------------------------------------------------
+st.markdown("""
+<style>
+div[data-testid="stCodeBlock"] code,
+div[data-testid="stCodeBlock"] span,
+div[data-testid="stCodeBlock"] pre {
+    color: inherit !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ============================================================
 # BRAND BAR — minimal top nav, like a real SaaS product header
 # ============================================================
@@ -478,7 +592,7 @@ if generate_clicked:
         try:
             with st.spinner("AI agents are preparing your learning package..."):
 
-                learning_package = generate_learning_package(topic)
+                learning_package = coordinator_agent(topic)
 
                 st.markdown(learning_package, unsafe_allow_html=True)
 
