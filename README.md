@@ -14,6 +14,7 @@ Built with **Python, Streamlit, and Google Gemini** for the **Kaggle 5-Day AI Ag
 ---
 
 📹 Demo Video: *(Will be added before final submission.)*
+🌐 Live Demo: https://mindmesh-ai.streamlit.app
 
 --- 
 
