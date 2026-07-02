@@ -193,6 +193,9 @@ def _strip_leading_indent(text):
 def coordinator_agent(topic):
     # Step 1: Explainer Agent
     explanation = explainer_agent(topic)
+    print("========== EXPLANATION ==========")
+    print(repr(explanation))
+    print("=================================")
 
     # Step 2: Quiz Generator Agent (grounded in the explanation)
     quiz = quiz_agent(topic, explanation)
@@ -203,7 +206,7 @@ def coordinator_agent(topic):
     study_plan = planner_agent(topic, explanation)
 
     # Strip any leading indentation Gemini may have echoed back, so
-    # Streamlit never mistakes a line (e.g. "Answer:" or a code example)
+    # Streamlit never mistakes a line (e.g. "Answer:" or a code example)python3 -m pip show python-dotenv
     # for an indented Markdown code block.
     explanation = _strip_leading_indent(explanation)
     quiz = _strip_leading_indent(quiz)
@@ -518,7 +521,7 @@ st.markdown("""
 div[data-testid="stCodeBlock"] code,
 div[data-testid="stCodeBlock"] span,
 div[data-testid="stCodeBlock"] pre {
-    color: inherit !important;
+    color: #FAFAFA !important;
 }
 </style>
 """, unsafe_allow_html=True)
